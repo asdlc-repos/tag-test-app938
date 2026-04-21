@@ -1,0 +1,29 @@
+{
+  "overview": "A single lightweight Go-based REST API service exposes a /greeting endpoint returning JSON greetings. The service handles default and personalized greetings, standard error responses, and includes a health endpoint for operational monitoring.",
+  "requirements": [
+    "GET /greeting returns JSON with a message field and HTTP 200",
+    "Default greeting 'Hello, World!' when no name provided",
+    "Personalized greeting when name query parameter is provided",
+    "Sanitize name parameter to prevent injection",
+    "Return 405 for unsupported methods, 404 for undefined endpoints, 500 for internal errors",
+    "Content-Type application/json on all responses",
+    "Support UTF-8 query parameters",
+    "Respond within 100ms under normal load",
+    "Support 100+ concurrent requests",
+    "Log all requests with timestamp, endpoint, and status",
+    "Provide /health endpoint"
+  ],
+  "components": [
+    {
+      "name": "greeting-api",
+      "componentType": "service",
+      "language": "Go",
+      "dependsOn": [],
+      "entrypoint": "deployment/service",
+      "buildpack": "docker",
+      "appPath": "/greeting-api",
+      "openAPISpec": "openapi: 3.0.3\ninfo:\n  title: Greeting API\n  version: 1.0.0\n  description: Lightweight REST API providing greeting messages\nservers:\n  - url: http://localhost:9090\npaths:\n  /greeting:\n    get:\n      summary: Get a greeting message\n      parameters:\n        - name: name\n          in: query\n          required: false\n          schema:\n            type: string\n          description: Optional name for personalized greeting\n      responses:\n        '200':\n          description: Successful greeting response\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Greeting'\n        '405':\n          description: Method not allowed\n        '500':\n          description: Internal server error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\n  /health:\n    get:\n      summary: Health check\n      responses:\n        '200':\n          description: Service is healthy\n          content:\n            application/json:\n              schema:\n                type: object\n                properties:\n                  status:\n                    type: string\ncomponents:\n  schemas:\n    Greeting:\n      type: object\n      required: [message]\n      properties:\n        message:\n          type: string\n          example: Hello, World!\n    Error:\n      type: object\n      properties:\n        error:\n          type: string\n",
+      "componentAgentInstructions": "Implement a Go service using net/http listening on port 9090.\n\nEndpoints:\n- GET /greeting: If 'name' query param absent or empty, respond with JSON {\"message\":\"Hello, World!\"}. If present, sanitize it (strip HTML/control characters, limit length to 100, HTML-escape using html.EscapeString) and return {\"message\":\"Hello, \u003cname\u003e!\"}. Respond 200 with Content-Type application/json; charset=utf-8.\n- GET /health: return 200 JSON {\"status\":\"ok\"}.\n\nBehaviors:\n- For /greeting with non-GET methods: return 405 Method Not Allowed with Allow: GET header.\n- For unknown paths: return 404 with JSON {\"error\":\"not found\"}.\n- Wrap handlers with recover middleware returning 500 with JSON {\"error\":\"internal server error\"} on panic.\n- Logging middleware: log timestamp (RFC3339), method, path, status, duration to stdout.\n- Use http.Server with ReadTimeout 5s, WriteTimeout 10s, IdleTimeout 60s to handle concurrency.\n\nDockerfile: multi-stage build with golang:1.22-alpine builder and distroless or alpine runtime; expose 9090; CMD runs the binary.\n\nProvide go.mod (module greeting-api, go 1.22), main.go, and Dockerfile in /greeting-api."
+    }
+  ]
+}
